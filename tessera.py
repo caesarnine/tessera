@@ -183,8 +183,12 @@ def state(name: str, next_states: List[str]):
     def decorator(func):
         @wraps(func)
         def wrapped_state(self, context: StateContext):
-            # Start with clean message history for this state
-            state_context = StateContext(data=context.data)
+            
+            existing_messages = context.get_state_messages(name)
+            state_context = StateContext(
+                data=context.data,
+                messages=existing_messages
+            )
             
             # Run state function
             new_context, next_state = func(self, state_context)
