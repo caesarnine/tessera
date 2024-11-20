@@ -1,6 +1,13 @@
+import http.server
+import socketserver
+import tempfile
+import time
+import webbrowser
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import wraps
+from pathlib import Path
+from threading import Thread
 from typing import Any, Dict, List, Optional, Protocol
 
 
@@ -119,6 +126,129 @@ class Workflow:
         for hook in self.hooks:
             hook_context = hook(hook_context)
         return hook_context
+    
+    def generate_mermaid(self) -> str:
+        """
+        Generate a Mermaid.js diagram representation of the workflow.
+        Returns a string containing the Mermaid diagram definition.
+        """
+        # Track visited states to handle cycles
+        visited_edges = set()
+        
+        # Collect all state metadata
+        state_metadata = {}
+        for state_name, state_func in self.states.items():
+            # Get docstring if available
+            doc = state_func.__doc__ or ""
+            doc = doc.strip().split('\n')[0]  # Get first line of docstring
+            
+            state_metadata[state_name] = {
+                'description': doc,
+                'next_states': state_func.next_states
+            }
+        
+        # Start building the diagram
+        mermaid_lines = ['stateDiagram-v2']
+        
+        # Add states with descriptions
+        for state_name, metadata in state_metadata.items():
+            if metadata['description']:
+                mermaid_lines.append(f'    {state_name}: {metadata["description"]}')
+            else:
+                mermaid_lines.append(f'    {state_name}')
+        
+        # Add transitions
+        for state_name, metadata in state_metadata.items():
+            for next_state in metadata['next_states']:
+                edge = (state_name, next_state)
+                if edge not in visited_edges:
+                    mermaid_lines.append(f'    {state_name} --> {next_state}')
+                    visited_edges.add(edge)
+        
+        return '\n'.join(mermaid_lines)
+    
+    def visualize(self, port: int = 0) -> None:
+        """
+        Generate and display the workflow diagram in a web browser.
+        
+        Args:
+            port: Port to run the server on. If 0, uses a random available port.
+        """
+        # Generate the diagram
+        diagram = self.generate_mermaid()
+        
+        # Create HTML content
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Workflow Visualization</title>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }}
+                #diagram {{
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }}
+            </style>
+        </head>
+        <body>
+            <div id="diagram">
+                <pre class="mermaid">
+                    {diagram}
+                </pre>
+            </div>
+            <script>
+                mermaid.initialize({{ startOnLoad: true }});
+            </script>
+        </body>
+        </html>
+        """
+        
+        # Create a temporary file to serve
+        temp_dir = tempfile.mkdtemp()
+        temp_path = Path(temp_dir) / "workflow.html"
+        temp_path.write_text(html_content)
+        
+        # Create custom handler that serves our file
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=temp_dir, **kwargs)
+            
+            def log_message(self, format, *args):
+                # Suppress logging
+                pass
+        
+        # Find an available port if none specified
+        with socketserver.TCPServer(("", port), Handler) as httpd:
+            server_port = httpd.server_address[1]
+            
+            # Start server in a separate thread
+            server_thread = Thread(target=httpd.serve_forever)
+            server_thread.daemon = True  # Thread will close when main program exits
+            server_thread.start()
+            
+            # Open browser
+            url = f"http://localhost:{server_port}/workflow.html"
+            webbrowser.open(url)
+            
+            print(f"Visualization server running at {url}")
+            print("Press Ctrl+C to stop the server...")
+            
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\nShutting down server...")
+                httpd.shutdown()
+                httpd.server_close()
     
     def run(self, initial_state: str, initial_context: Optional[StateContext] = None) -> StateContext:
         context = initial_context or StateContext()
