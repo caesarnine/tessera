@@ -1,0 +1,6 @@
+.env
+.pixi
+__pycache__
+**/workflow_checkpoints/*
+**/*.ipynb
+**/*.log
