@@ -362,7 +362,7 @@ class StoryWorkflow(Workflow):
         self.add_hook(WorkflowLogger(truncate_messages=False))
         self.add_hook(CheckpointHook())
 
-    @state("brainstorm", next_states=["develop_plot"])
+    @state("brainstorm")
     def brainstorm(self, context: StateContext) -> Tuple[StateContext, str]:
         context = (context
             .add_user(
@@ -380,7 +380,7 @@ class StoryWorkflow(Workflow):
             )
         ), "develop_plot"
 
-    @state("develop_plot", next_states=["develop_characters"])
+    @state("develop_plot")
     def develop_plot(self, context: StateContext) -> Tuple[StateContext, str]:
         context = (context
             .add_user(
@@ -396,7 +396,7 @@ class StoryWorkflow(Workflow):
             .update(plot=response)
         ), "develop_characters"
 
-    @state("develop_characters", next_states=["write_draft"])
+    @state("develop_characters")
     def develop_characters(self, context: StateContext) -> Tuple[StateContext, str]:
         context = (context
             .add_user(
@@ -411,7 +411,7 @@ class StoryWorkflow(Workflow):
             .update(characters=response)
         ), "write_draft"
 
-    @state("write_draft", next_states=["critique"])
+    @state("write_draft")
     def write_draft(self, context: StateContext) -> Tuple[StateContext, str]:
         context = (context
             .add_user(
@@ -427,7 +427,7 @@ class StoryWorkflow(Workflow):
             .update(draft=response)
         ), "critique"
 
-    @state("critique", next_states=["write_draft", "final"])
+    @state("critique")
     def critique(self, context: StateContext) -> Tuple[StateContext, str]:
         context = (context
             .add_user(
@@ -457,7 +457,7 @@ class StoryWorkflow(Workflow):
             .add_assistant(next_state)
         ), next_state
 
-    @state("final", next_states=[])
+    @state("final")
     def final(self, context: StateContext) -> Tuple[StateContext, None]:
         context = (context
             .add_user(

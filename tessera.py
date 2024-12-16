@@ -89,15 +89,11 @@ class Hook(Protocol):
         ...
 
 
-class WorkflowValidationError(Exception):
-    pass
-
 class Workflow:
     def __init__(self):
         self.states = {}
         self.hooks: List[Hook] = []
         self._register_states()
-        self._validate_workflow()
 
     def _register_states(self):
         for attr_name in dir(self):
@@ -105,16 +101,6 @@ class Workflow:
             if hasattr(attr, 'is_workflow_state'):
                 bound_method = attr.__get__(self, self.__class__)
                 self.states[attr.name] = bound_method
-
-    def _validate_workflow(self):
-        # Validate all referenced next_states exist
-        for state_name, state_func in self.states.items():
-            invalid_states = [s for s in state_func.next_states
-                            if s not in self.states]
-            if invalid_states:
-                raise WorkflowValidationError(
-                    f"State '{state_name}' references non-existent states: {invalid_states}"
-                )
 
     def add_hook(self, hook: Hook):
         """Add a hook to the workflow"""
@@ -186,11 +172,10 @@ class Workflow:
         )
         return hook_ctx.context or context
 
-def state(name: str, next_states: List[str]):
+def state(name: str):
     def decorator(func):
         @wraps(func)
         def wrapped_state(self, context: StateContext):
-
             existing_messages = context.get_state_messages(name)
             state_context = StateContext(
                 data=context.data,
@@ -214,7 +199,6 @@ def state(name: str, next_states: List[str]):
 
         wrapped_state.is_workflow_state = True
         wrapped_state.name = name
-        wrapped_state.next_states = next_states
         return wrapped_state
     return decorator
 
